@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>TruthLens — AI Review Lie Detector</title>
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet"/>
+    <style>
+        :root {
+            --bg: #0a0a0f;
+            --surface: #111118;
+            --card: #16161f;
+            --border: #2a2a3a;
+            --accent: #00e5ff;
+            --danger: #ff3b5c;
+            --warn: #ffb800;
+            --safe: #00e676;
+            --text: #e8e8f0;
+            --muted: #6b6b80;
+            --font-display: 'Syne', sans-serif;
+            --font-mono: 'Space Mono', monospace;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: var(--font-mono);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background-image:
+                    linear-gradient(rgba(0,229,255,0.03) 1px, transparent 1px),
+                    linear-gradient(90deg, rgba(0,229,255,0.03) 1px, transparent 1px);
+            background-size: 40px 40px;
+            pointer-events: none;
+            z-index: 0;
+        }
+        .container {
+            max-width: 860px;
+            margin: 0 auto;
+            padding: 40px 24px 80px;
+            position: relative;
+            z-index: 1;
+        }
+        header {
+            text-align: center;
+            margin-bottom: 52px;
+            animation: fadeDown 0.7s ease both;
+        }
+        .logo-line {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 14px;
+            margin-bottom: 10px;
+        }
+        .logo-icon {
+            width: 44px; height: 44px;
+            background: var(--accent);
+            border-radius: 10px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 22px;
+            box-shadow: 0 0 24px rgba(0,229,255,0.4);
+        }
+        h1 {
+            font-family: var(--font-display);
+            font-size: clamp(2rem, 5vw, 3rem);
+            font-weight: 800;
+            letter-spacing: -1px;
+            color: #fff;
+        }
+        h1 span { color: var(--accent); }
+        .tagline {
+            color: var(--muted);
+            font-size: 0.82rem;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            margin-top: 8px;
+        }
+        .tab-bar {
+            display: flex;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 4px;
+            margin-bottom: 28px;
+            animation: fadeUp 0.6s 0.1s ease both;
+        }
+        .tab {
+            flex: 1;
+            padding: 11px;
+            border: none;
+            background: transparent;
+            color: var(--muted);
+            font-family: var(--font-mono);
+            font-size: 0.82rem;
+            cursor: pointer;
+            border-radius: 9px;
+            transition: all 0.2s;
+            letter-spacing: 0.5px;
+        }
+        .tab.active {
+            background: var(--card);
+            color: var(--accent);
+            border: 1px solid var(--border);
+            box-shadow: 0 0 12px rgba(0,229,255,0.08);
+        }
+        .input-panel {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 28px;
+            margin-bottom: 24px;
+            animation: fadeUp 0.6s 0.2s ease both;
+        }
+        .panel-label {
+            font-size: 0.72rem;
+            color: var(--accent);
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            margin-bottom: 12px;
+        }
+        textarea {
+            width: 100%;
+            min-height: 180px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            color: var(--text);
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            padding: 16px;
+            resize: vertical;
+            line-height: 1.7;
+            transition: border-color 0.2s;
+            outline: none;
+        }
+        textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(0,229,255,0.08); }
+        textarea::placeholder { color: var(--muted); }
+        input[type="url"] {
+            width: 100%;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            color: var(--text);
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            padding: 14px 16px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        input[type="url"]:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(0,229,255,0.08); }
+        input[type="url"]::placeholder { color: var(--muted); }
+        .url-note {
+            margin-top: 10px;
+            font-size: 0.75rem;
+            color: var(--muted);
+            line-height: 1.5;
+        }
+        .url-note span { color: var(--warn); }
+        .analyze-btn {
+            width: 100%;
+            padding: 16px;
+            background: var(--accent);
+            color: #000;
+            border: none;
+            border-radius: 12px;
+            font-family: var(--font-display);
+            font-size: 1rem;
+            font-weight: 700;
+            cursor: pointer;
+            letter-spacing: 1px;
+            transition: all 0.2s;
+            margin-top: 8px;
+        }
+        .analyze-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 28px rgba(0,229,255,0.35); }
+        .analyze-btn:active { transform: translateY(0); }
+        .analyze-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 48px 24px;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            margin-bottom: 24px;
+        }
+        .loading.visible { display: block; }
+        .scan-bar {
+            width: 100%;
+            height: 3px;
+            background: var(--border);
+            border-radius: 2px;
+            overflow: hidden;
+            margin: 20px 0;
+        }
+        .scan-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent), #7b2fff);
+            border-radius: 2px;
+            animation: scanAnim 1.8s ease-in-out infinite;
+        }
+        @keyframes scanAnim {
+            0%   { width: 0%;  margin-left: 0; }
+            50%  { width: 60%; margin-left: 20%; }
+            100% { width: 0%;  margin-left: 100%; }
+        }
+        .loading-text { color: var(--muted); font-size: 0.8rem; letter-spacing: 1px; }
+        #results { display: none; }
+        #results.visible { display: block; animation: fadeUp 0.6s ease both; }
+        .score-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 32px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 32px;
+            flex-wrap: wrap;
+        }
+        .score-ring-wrap { position: relative; flex-shrink: 0; }
+        .score-ring { width: 130px; height: 130px; transform: rotate(-90deg); }
+        .score-ring circle { fill: none; stroke-width: 10; stroke-linecap: round; }
+        .ring-bg { stroke: var(--border); }
+        .ring-fill { stroke-dasharray: 345; stroke-dashoffset: 345; transition: stroke-dashoffset 1.2s cubic-bezier(0.4,0,0.2,1); }
+        .score-number {
+            position: absolute; inset: 0;
+            display: flex; align-items: center; justify-content: center; flex-direction: column;
+            font-family: var(--font-display);
+            font-size: 2rem; font-weight: 800;
+        }
+        .score-label-small { font-size: 0.6rem; color: var(--muted); letter-spacing: 1px; margin-top: -4px; }
+        .score-info { flex: 1; min-width: 200px; }
+        .score-title { font-family: var(--font-display); font-size: 1.5rem; font-weight: 700; margin-bottom: 6px; }
+        .score-verdict { font-size: 0.8rem; color: var(--muted); line-height: 1.6; }
+        .verdict-badge {
+            display: inline-block;
+            padding: 4px 14px;
+            border-radius: 20px;
+            font-size: 0.72rem; font-weight: 700;
+            letter-spacing: 1px; text-transform: uppercase;
+            margin-bottom: 10px;
+        }
+        .signals-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 14px;
+            margin-bottom: 20px;
+        }
+        .signal-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 20px;
+            transition: border-color 0.2s;
+        }
+        .signal-card:hover { border-color: rgba(0,229,255,0.3); }
+        .signal-header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+        .signal-icon { font-size: 1.2rem; }
+        .signal-name { font-size: 0.78rem; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; }
+        .signal-score { font-family: var(--font-display); font-size: 1.4rem; font-weight: 700; margin-bottom: 6px; }
+        .signal-bar { height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; margin-bottom: 8px; }
+        .signal-bar-fill { height: 100%; border-radius: 2px; transition: width 1s ease; }
+        .signal-desc { font-size: 0.75rem; color: var(--muted); line-height: 1.5; }
+        .analysis-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 28px;
+            margin-bottom: 20px;
+        }
+        .analysis-title {
+            font-family: var(--font-display);
+            font-size: 1rem; font-weight: 700;
+            margin-bottom: 18px;
+            color: var(--accent);
+            letter-spacing: 0.5px;
+        }
+        .flag-item {
+            display: flex; gap: 14px; align-items: flex-start;
+            padding: 14px 0;
+            border-bottom: 1px solid var(--border);
+        }
+        .flag-item:last-child { border-bottom: none; padding-bottom: 0; }
+        .flag-dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 5px; flex-shrink: 0; }
+        .flag-type { font-size: 0.72rem; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 4px; font-weight: 700; }
+        .flag-text { font-size: 0.82rem; color: var(--muted); line-height: 1.6; }
+        .summary-box {
+            background: rgba(0,229,255,0.04);
+            border: 1px solid rgba(0,229,255,0.15);
+            border-radius: 14px;
+            padding: 22px;
+            font-size: 0.85rem; line-height: 1.8;
+            color: var(--text);
+        }
+        .error-box {
+            background: rgba(255,59,92,0.08);
+            border: 1px solid rgba(255,59,92,0.25);
+            border-radius: 12px;
+            padding: 18px 22px;
+            color: var(--danger);
+            font-size: 0.85rem;
+            display: none;
+            margin-bottom: 16px;
+        }
+        .error-box.visible { display: block; }
+        .tab-panel { display: none; }
+        .tab-panel.active { display: block; }
+        @keyframes fadeDown {
+            from { opacity: 0; transform: translateY(-20px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(16px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+        @media (max-width: 600px) {
+            .score-card { flex-direction: column; align-items: flex-start; gap: 20px; }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <header>
+        <div class="logo-line">
+            <div class="logo-icon">🔍</div>
+            <h1>Truth<span>Lens</span></h1>
+        </div>
+        <p class="tagline">AI-Powered Fake Review Detection Engine</p>
+    </header>
+    <div class="tab-bar">
+        <button class="tab active" onclick="switchTab('text')">📋 Paste Reviews</button>
+        <button class="tab" onclick="switchTab('url')">🔗 Product URL</button>
+    </div>
+    <div class="input-panel">
+        <div id="tab-text" class="tab-panel active">
+            <div class="panel-label">// paste product reviews below</div>
+            <textarea id="review-input" placeholder="Paste one or more product reviews here...
+
+Example:
+★★★★★ — Amazing product! Totally changed my life. Must buy!!
+★★★★★ — Best purchase ever. Highly recommend to everyone!
+★★☆☆☆ — Quality feels cheap, arrived late and packaging was damaged."></textarea>
+        </div>
+        <div id="tab-url" class="tab-panel">
+            <div class="panel-label">// enter amazon or flipkart product url</div>
+            <input type="url" id="url-input" placeholder="https://www.amazon.in/product/..." />
+
+        </div>
+    </div>
+    <div class="error-box" id="error-box"></div>
+    <button class="analyze-btn" id="analyze-btn" onclick="analyze()">
+        ⚡ ANALYZE FOR FAKE REVIEWS
+    </button>
+    <div class="loading" id="loading">
+        <div style="font-size:0.8rem; color: var(--accent); letter-spacing:2px; text-transform:uppercase;">Scanning Reviews</div>
+        <div class="scan-bar"><div class="scan-fill"></div></div>
+        <div class="loading-text" id="loading-msg">Initializing linguistic pattern analysis...</div>
+    </div>
+    <div id="results">
+        <div class="score-card">
+            <div class="score-ring-wrap">
+                <svg class="score-ring" viewBox="0 0 120 120">
+                    <circle class="ring-bg" cx="60" cy="60" r="55"/>
+                    <circle class="ring-fill" id="ring-fill" cx="60" cy="60" r="55"/>
+                </svg>
+                <div class="score-number">
+                    <span id="score-num">--</span>
+                    <span class="score-label-small">TRUST</span>
+                </div>
+            </div>
+            <div class="score-info">
+                <div class="verdict-badge" id="verdict-badge">Analyzing...</div>
+                <div class="score-title" id="score-title">—</div>
+                <div class="score-verdict" id="score-verdict">—</div>
+            </div>
+        </div>
+        <div class="signals-grid" id="signals-grid"></div>
+        <div class="analysis-card">
+            <div class="analysis-title">🚩 Detected Patterns & Red Flags</div>
+            <div id="flags-list"></div>
+        </div>
+        <div class="analysis-card">
+            <div class="analysis-title">🧠 AI Reasoning Summary</div>
+            <div class="summary-box" id="summary-box"></div>
+        </div>
+    </div>
+</div>
+<script>
+    let currentTab = 'text';
+
+    function switchTab(tab) {
+        currentTab = tab;
+        document.querySelectorAll('.tab').forEach((t, i) => {
+            t.classList.toggle('active', (i === 0 && tab === 'text') || (i === 1 && tab === 'url'));
+        });
+        document.getElementById('tab-text').classList.toggle('active', tab === 'text');
+        document.getElementById('tab-url').classList.toggle('active', tab === 'url');
+    }
+
+    const loadingMsgs = [
+        "Initializing linguistic pattern analysis...",
+        "Detecting sentiment manipulation...",
+        "Cross-checking review diversity...",
+        "Scanning for bot-like repetition...",
+        "Computing trust score...",
+        "Finalizing verdict..."
+    ];
+
+    async function analyze() {
+        const errorBox = document.getElementById('error-box');
+        errorBox.classList.remove('visible');
+        let body = {};
+        if (currentTab === 'text') {
+            const text = document.getElementById('review-input').value.trim();
+            if (!text) { showError("Please paste some reviews to analyze."); return; }
+            body = { text };
+        } else {
+            const url = document.getElementById('url-input').value.trim();
+            if (!url) { showError("Please enter a product URL."); return; }
+            body = { url };
+        }
+        document.getElementById('loading').classList.add('visible');
+        document.getElementById('results').classList.remove('visible');
+        document.getElementById('analyze-btn').disabled = true;
+        let msgIdx = 0;
+        const msgInterval = setInterval(() => {
+            document.getElementById('loading-msg').textContent = loadingMsgs[msgIdx % loadingMsgs.length];
+            msgIdx++;
+        }, 1400);
+        try {
+            const response = await fetch("http://127.0.0.1:8000/analyze", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(body)
+            });
+            clearInterval(msgInterval);
+            document.getElementById('loading').classList.remove('visible');
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.detail || "Server error");
+            }
+            const result = await response.json();
+            renderResults(result);
+        } catch (err) {
+            clearInterval(msgInterval);
+            document.getElementById('loading').classList.remove('visible');
+            document.getElementById('analyze-btn').disabled = false;
+            if (err.message.includes("Failed to fetch")) {
+                showError("Cannot connect to backend. Make sure you ran: uvicorn main:app --reload");
+            } else {
+                showError("Analysis failed: " + err.message);
+            }
+        }
+    }
+
+    function renderResults(r) {
+        document.getElementById('analyze-btn').disabled = false;
+        const colorMap = { safe: '#00e676', warn: '#ffb800', danger: '#ff3b5c' };
+        const color = colorMap[r.verdictColor] || '#00e5ff';
+        const offset = 345 - (r.trustScore / 100) * 345;
+        const ring = document.getElementById('ring-fill');
+        ring.style.stroke = color;
+        setTimeout(() => { ring.style.strokeDashoffset = offset; }, 100);
+        document.getElementById('score-num').textContent = r.trustScore;
+        document.getElementById('score-num').style.color = color;
+        const badge = document.getElementById('verdict-badge');
+        badge.textContent = r.verdict;
+        badge.style.background = color + '22';
+        badge.style.color = color;
+        badge.style.border = `1px solid ${color}44`;
+        document.getElementById('score-title').textContent = r.shortTitle;
+        document.getElementById('score-verdict').textContent = r.shortSummary;
+        document.getElementById('signals-grid').innerHTML = r.signals.map(s => {
+            const sc = s.score;
+            const sigColor = sc > 70 ? '#ff3b5c' : sc > 40 ? '#ffb800' : '#00e676';
+            return `
+      <div class="signal-card">
+        <div class="signal-header">
+          <span class="signal-icon">${s.icon}</span>
+          <span class="signal-name">${s.name}</span>
+        </div>
+        <div class="signal-score" style="color:${sigColor}">${sc}<span style="font-size:0.9rem;color:var(--muted)">/100</span></div>
+        <div class="signal-bar">
+          <div class="signal-bar-fill" style="width:0%;background:${sigColor}" data-width="${sc}%"></div>
+        </div>
+        <div class="signal-desc">${s.description}</div>
+      </div>`;
+        }).join('');
+        setTimeout(() => {
+            document.querySelectorAll('.signal-bar-fill').forEach(el => { el.style.width = el.dataset.width; });
+        }, 200);
+        const sc = { high: '#ff3b5c', medium: '#ffb800', low: '#00e5ff' };
+        document.getElementById('flags-list').innerHTML = r.flags.map(f => `
+    <div class="flag-item">
+      <div class="flag-dot" style="background:${sc[f.severity] || '#888'}"></div>
+      <div class="flag-content">
+        <div class="flag-type" style="color:${sc[f.severity] || '#888'}">${f.type} · ${f.severity} severity</div>
+        <div class="flag-text">${f.description}</div>
+      </div>
+    </div>`).join('');
+        document.getElementById('summary-box').textContent = r.fullSummary;
+        document.getElementById('results').classList.add('visible');
+        document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function showError(msg) {
+        const box = document.getElementById('error-box');
+        box.textContent = '⚠ ' + msg;
+        box.classList.add('visible');
+    }
+</script>
+</body>
+</html>

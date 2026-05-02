@@ -56,7 +56,7 @@ async def analyze(req: AnalyzeRequest):
             '  "signals": [\n'
             '    {"name": "Sentiment Uniformity", "icon": "S", "score": <0-100>, "description": "<finding>"},\n'
             '    {"name": "Linguistic Diversity", "icon": "L", "score": <0-100>, "description": "<finding>"},\n'
-            '    {"name": "Incentivized Language", "icon": "I", "score": <0-100>, "description": "<finding>"},\n'
+            '    {"name": "sponserd Language", "icon": "I", "score": <0-100>, "description": "<finding>"},\n'
             '    {"name": "Timing Patterns", "icon": "T", "score": <0-100>, "description": "<finding>"},\n'
             '    {"name": "Specificity Level", "icon": "SP", "score": <0-100>, "description": "<finding>"},\n'
             '    {"name": "Emotional Manipulation", "icon": "E", "score": <0-100>, "description": "<finding>"}\n'

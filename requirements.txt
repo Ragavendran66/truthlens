@@ -1,6 +1,6 @@
 fastapi
 uvicorn
-playwright
 httpx
 python-dotenv
 pydantic
+beautifulsoup4

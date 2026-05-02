@@ -1,30 +1,36 @@
-from playwright.sync_api import sync_playwright
-from concurrent.futures import ThreadPoolExecutor
+import httpx
 import asyncio
-import time
-import os
+import re
+from bs4 import BeautifulSoup
 
-_executor = ThreadPoolExecutor(max_workers=2)
+HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/120.0.0.0 Safari/537.36"
+    ),
+    "Accept-Language": "en-IN,en;q=0.9",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Connection": "keep-alive",
+    "Upgrade-Insecure-Requests": "1",
+}
 
-def _extract_asin(url: str):
-    """Extract ASIN from Amazon URL."""
+def extract_asin(url: str) -> str | None:
     if "/dp/" in url:
         return url.split("/dp/")[1].split("/")[0].split("?")[0]
     if "/product-reviews/" in url:
         return url.split("/product-reviews/")[1].split("/")[0].split("?")[0]
-    # Try to find B0... style ASIN anywhere in URL
-    import re
     match = re.search(r'/(B[0-9A-Z]{9})(?:/|$|\?)', url)
     if match:
         return match.group(1)
     return None
 
-def _sync_scrape(url: str):
-    if not url.startswith("http://") and not url.startswith("https://"):
+async def scrape_amazon_reviews(url: str) -> list[dict]:
+    if not url.startswith("http"):
         url = "https://" + url
 
-    # --- FIX 1: Extract ASIN safely before using it ---
-    asin = _extract_asin(url)
+    asin = extract_asin(url)
     if not asin:
         raise ValueError(f"Could not extract ASIN from URL: {url}")
 
@@ -33,85 +39,47 @@ def _sync_scrape(url: str):
         f"?reviewerType=all_reviews&sortBy=recent&pageNumber=1"
     )
 
-    reviews = []
+    try:
+        async with httpx.AsyncClient(
+                headers=HEADERS,
+                follow_redirects=True,
+                timeout=20
+        ) as client:
+            response = await client.get(reviews_url)
 
-    with sync_playwright() as p:
-        # --- FIX 2: headless=True — required on Render (no display available) ---
-        browser = p.chromium.launch(
-            headless=True,
-            args=[
-                "--no-sandbox",
-                "--disable-setuid-sandbox",
-                "--disable-dev-shm-usage",        # important on Render
-                "--disable-gpu",
-                "--disable-blink-features=AutomationControlled",
-            ]
-        )
+        if response.status_code != 200:
+            raise ValueError(f"Amazon returned status {response.status_code}. Try pasting reviews manually.")
 
-        context_args = dict(
-            user_agent=(
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/120.0.0.0 Safari/537.36"
-            ),
-            viewport={"width": 1280, "height": 800},
-            locale="en-IN",
-            extra_http_headers={
-                "Accept-Language": "en-IN,en;q=0.9",
-                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            }
-        )
+        soup = BeautifulSoup(response.text, "html.parser")
 
-        session_file = "amazon_session.json"
-        if os.path.exists(session_file):
-            context_args["storage_state"] = session_file
+        # Check if Amazon blocked us (shows captcha or sign-in page)
+        if "Enter the characters you see below" in response.text or \
+                "Type the characters you see in this image" in response.text:
+            raise ValueError("Amazon is showing a CAPTCHA. Please paste reviews manually.")
 
-        context = browser.new_context(**context_args)
-        page = context.new_page()
+        if "Sign in" in response.text and "review" not in response.text.lower():
+            raise ValueError("Amazon requires sign-in for this page. Please paste reviews manually.")
 
-        # Hide webdriver fingerprint
-        page.add_init_script(
-            "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
-        )
+        items = soup.select('[data-hook="review"]')
 
-        try:
-            # --- FIX 3: use domcontentloaded — networkidle hangs on Amazon ---
-            page.goto(reviews_url, timeout=30000, wait_until="domcontentloaded")
-            # Small wait for review elements to render
-            page.wait_for_timeout(2000)
-        except Exception as e:
-            print(f"Page load warning (continuing anyway): {e}")
+        if not items:
+            raise ValueError("No reviews found. The product may have no reviews or Amazon blocked the request. Try pasting reviews manually.")
 
-        try:
-            items = page.query_selector_all('[data-hook="review"]')
-            print(f"REVIEWS FOUND: {len(items)}")
+        reviews = []
+        for item in items[:10]:
+            rating_el = item.select_one('[data-hook="review-star-rating"]')
+            title_el  = item.select_one('[data-hook="review-title"]')
+            text_el   = item.select_one('[data-hook="review-body"]')
+            date_el   = item.select_one('[data-hook="review-date"]')
 
-            for item in items[:10]:
-                try:
-                    rating_el = item.query_selector('[data-hook="review-star-rating"]')
-                    text_el   = item.query_selector('[data-hook="review-body"]')
-                    title_el  = item.query_selector('[data-hook="review-title"]')
-                    date_el   = item.query_selector('[data-hook="review-date"]')
+            reviews.append({
+                "rating": rating_el.get_text(strip=True) if rating_el else "N/A",
+                "title":  title_el.get_text(strip=True)  if title_el  else "N/A",
+                "text":   text_el.get_text(strip=True)   if text_el   else "N/A",
+                "date":   date_el.get_text(strip=True)   if date_el   else "N/A",
+            })
 
-                    reviews.append({
-                        "rating": rating_el.inner_text().strip() if rating_el else "N/A",
-                        "title":  title_el.inner_text().strip()  if title_el  else "N/A",
-                        "text":   text_el.inner_text().strip()   if text_el   else "N/A",
-                        "date":   date_el.inner_text().strip()   if date_el   else "N/A",
-                    })
-                except Exception as e:
-                    print(f"Error parsing review item: {e}")
-                    continue
+        return reviews
 
-        except Exception as e:
-            print(f"Error reading reviews: {e}")
-
-        finally:
-            browser.close()
-
-    return reviews
-
-
-async def scrape_amazon_reviews(url: str):
-    loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(_executor, _sync_scrape, url)
+    except (httpx.TimeoutException, httpx.ConnectError) as e:
+        raise ValueError(f"Network error reaching Amazon: {str(e)}")

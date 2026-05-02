@@ -159,7 +159,7 @@
             margin-top: 10px;
             font-size: 0.75rem;
             color: var(--muted);
-            line-height: 1.5;
+            line-height: 1.6;
         }
         .url-note span { color: var(--warn); }
         .analyze-btn {
@@ -188,6 +188,7 @@
             border: 1px solid var(--border);
             border-radius: 16px;
             margin-bottom: 24px;
+            margin-top: 16px;
         }
         .loading.visible { display: block; }
         .scan-bar {
@@ -227,7 +228,11 @@
         .score-ring { width: 130px; height: 130px; transform: rotate(-90deg); }
         .score-ring circle { fill: none; stroke-width: 10; stroke-linecap: round; }
         .ring-bg { stroke: var(--border); }
-        .ring-fill { stroke-dasharray: 345; stroke-dashoffset: 345; transition: stroke-dashoffset 1.2s cubic-bezier(0.4,0,0.2,1); }
+        .ring-fill {
+            stroke-dasharray: 345;
+            stroke-dashoffset: 345;
+            transition: stroke-dashoffset 1.2s cubic-bezier(0.4,0,0.2,1);
+        }
         .score-number {
             position: absolute; inset: 0;
             display: flex; align-items: center; justify-content: center; flex-direction: column;
@@ -297,6 +302,7 @@
             padding: 22px;
             font-size: 0.85rem; line-height: 1.8;
             color: var(--text);
+            white-space: pre-wrap;
         }
         .error-box {
             background: rgba(255,59,92,0.08);
@@ -307,10 +313,16 @@
             font-size: 0.85rem;
             display: none;
             margin-bottom: 16px;
+            margin-top: 12px;
         }
         .error-box.visible { display: block; }
         .tab-panel { display: none; }
         .tab-panel.active { display: block; }
+        .no-flags {
+            font-size: 0.82rem;
+            color: var(--muted);
+            padding: 10px 0;
+        }
         @keyframes fadeDown {
             from { opacity: 0; transform: translateY(-20px); }
             to   { opacity: 1; transform: translateY(0); }
@@ -333,10 +345,12 @@
         </div>
         <p class="tagline">AI-Powered Fake Review Detection Engine</p>
     </header>
+
     <div class="tab-bar">
         <button class="tab active" onclick="switchTab('text')">📋 Paste Reviews</button>
         <button class="tab" onclick="switchTab('url')">🔗 Product URL</button>
     </div>
+
     <div class="input-panel">
         <div id="tab-text" class="tab-panel active">
             <div class="panel-label">// paste product reviews below</div>
@@ -349,19 +363,25 @@ Example:
         </div>
         <div id="tab-url" class="tab-panel">
             <div class="panel-label">// enter amazon or flipkart product url</div>
-            <input type="url" id="url-input" placeholder="https://www.amazon.in/product/..." />
-
+            <input type="url" id="url-input" placeholder="https://www.amazon.in/dp/..." />
+            <div class="url-note">
+                <span>⚠ Note:</span> URL scraping depends on your backend's capabilities. If reviews fail to load, paste them manually in the text tab instead.
+            </div>
         </div>
     </div>
+
     <div class="error-box" id="error-box"></div>
+
     <button class="analyze-btn" id="analyze-btn" onclick="analyze()">
         ⚡ ANALYZE FOR FAKE REVIEWS
     </button>
+
     <div class="loading" id="loading">
         <div style="font-size:0.8rem; color: var(--accent); letter-spacing:2px; text-transform:uppercase;">Scanning Reviews</div>
         <div class="scan-bar"><div class="scan-fill"></div></div>
         <div class="loading-text" id="loading-msg">Initializing linguistic pattern analysis...</div>
     </div>
+
     <div id="results">
         <div class="score-card">
             <div class="score-ring-wrap">
@@ -380,17 +400,21 @@ Example:
                 <div class="score-verdict" id="score-verdict">—</div>
             </div>
         </div>
+
         <div class="signals-grid" id="signals-grid"></div>
+
         <div class="analysis-card">
             <div class="analysis-title">🚩 Detected Patterns & Red Flags</div>
             <div id="flags-list"></div>
         </div>
+
         <div class="analysis-card">
             <div class="analysis-title">🧠 AI Reasoning Summary</div>
             <div class="summary-box" id="summary-box"></div>
         </div>
     </div>
 </div>
+
 <script>
     let currentTab = 'text';
 
@@ -401,6 +425,23 @@ Example:
         });
         document.getElementById('tab-text').classList.toggle('active', tab === 'text');
         document.getElementById('tab-url').classList.toggle('active', tab === 'url');
+        hideError();
+    }
+
+    function showError(msg) {
+        const box = document.getElementById('error-box');
+        box.textContent = '⚠ ' + msg;
+        box.classList.add('visible');
+        box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    function hideError() {
+        document.getElementById('error-box').classList.remove('visible');
+    }
+
+    function setLoading(on) {
+        document.getElementById('loading').classList.toggle('visible', on);
+        document.getElementById('analyze-btn').disabled = on;
     }
 
     const loadingMsgs = [
@@ -413,9 +454,9 @@ Example:
     ];
 
     async function analyze() {
-        const errorBox = document.getElementById('error-box');
-        errorBox.classList.remove('visible');
+        hideError();
         let body = {};
+
         if (currentTab === 'text') {
             const text = document.getElementById('review-input').value.trim();
             if (!text) { showError("Please paste some reviews to analyze."); return; }
@@ -423,36 +464,50 @@ Example:
         } else {
             const url = document.getElementById('url-input').value.trim();
             if (!url) { showError("Please enter a product URL."); return; }
+            if (!url.startsWith('http://') && !url.startsWith('https://')) {
+                showError("Please enter a valid URL starting with https://");
+                return;
+            }
             body = { url };
         }
-        document.getElementById('loading').classList.add('visible');
+
         document.getElementById('results').classList.remove('visible');
-        document.getElementById('analyze-btn').disabled = true;
+        setLoading(true);
+
         let msgIdx = 0;
         const msgInterval = setInterval(() => {
             document.getElementById('loading-msg').textContent = loadingMsgs[msgIdx % loadingMsgs.length];
             msgIdx++;
         }, 1400);
+
         try {
-            const response = await fetch(""https://truthlens-cqmo.onrender.com/analyze"", {
+            const response = await fetch("https://truthlens-cqmo.onrender.com/analyze", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(body)
             });
+
             clearInterval(msgInterval);
-            document.getElementById('loading').classList.remove('visible');
+            setLoading(false);
+
             if (!response.ok) {
-                const err = await response.json();
-                throw new Error(err.detail || "Server error");
+                let errMsg = `Server error (${response.status})`;
+                try {
+                    const err = await response.json();
+                    errMsg = err.detail || err.message || errMsg;
+                } catch (_) {}
+                throw new Error(errMsg);
             }
+
             const result = await response.json();
             renderResults(result);
+
         } catch (err) {
             clearInterval(msgInterval);
-            document.getElementById('loading').classList.remove('visible');
-            document.getElementById('analyze-btn').disabled = false;
-            if (err.message.includes("Failed to fetch")) {
-                showError("Cannot connect to backend. Make sure you ran: uvicorn main:app --reload");
+            setLoading(false);
+
+            if (err.name === 'TypeError' && err.message.toLowerCase().includes('fetch')) {
+                showError("Cannot reach the server. The backend may be sleeping (Render free tier spins down — wait 30 seconds and try again).");
             } else {
                 showError("Analysis failed: " + err.message);
             }
@@ -460,59 +515,88 @@ Example:
     }
 
     function renderResults(r) {
-        document.getElementById('analyze-btn').disabled = false;
         const colorMap = { safe: '#00e676', warn: '#ffb800', danger: '#ff3b5c' };
-        const color = colorMap[r.verdictColor] || '#00e5ff';
-        const offset = 345 - (r.trustScore / 100) * 345;
+        const verdictColorKey = (r.verdictColor || '').toLowerCase();
+        const color = colorMap[verdictColorKey] || '#00e5ff';
+
+        const trustScore = typeof r.trustScore === 'number' ? r.trustScore : parseInt(r.trustScore) || 0;
+        const clampedScore = Math.max(0, Math.min(100, trustScore));
+        const offset = 345 - (clampedScore / 100) * 345;
         const ring = document.getElementById('ring-fill');
         ring.style.stroke = color;
-        setTimeout(() => { ring.style.strokeDashoffset = offset; }, 100);
-        document.getElementById('score-num').textContent = r.trustScore;
+        setTimeout(() => { ring.style.strokeDashoffset = offset; }, 120);
+
+        document.getElementById('score-num').textContent = clampedScore;
         document.getElementById('score-num').style.color = color;
+
         const badge = document.getElementById('verdict-badge');
-        badge.textContent = r.verdict;
+        badge.textContent = r.verdict || 'Unknown';
         badge.style.background = color + '22';
         badge.style.color = color;
-        badge.style.border = `1px solid ${color}44`;
-        document.getElementById('score-title').textContent = r.shortTitle;
-        document.getElementById('score-verdict').textContent = r.shortSummary;
-        document.getElementById('signals-grid').innerHTML = r.signals.map(s => {
-            const sc = s.score;
+        badge.style.border = '1px solid ' + color + '44';
+
+        document.getElementById('score-title').textContent = r.shortTitle || r.title || '—';
+        document.getElementById('score-verdict').textContent = r.shortSummary || r.summary || '—';
+
+        const signals = Array.isArray(r.signals) ? r.signals : [];
+        document.getElementById('signals-grid').innerHTML = signals.map(s => {
+            const sc = typeof s.score === 'number' ? s.score : parseInt(s.score) || 0;
             const sigColor = sc > 70 ? '#ff3b5c' : sc > 40 ? '#ffb800' : '#00e676';
             return `
-      <div class="signal-card">
-        <div class="signal-header">
-          <span class="signal-icon">${s.icon}</span>
-          <span class="signal-name">${s.name}</span>
-        </div>
-        <div class="signal-score" style="color:${sigColor}">${sc}<span style="font-size:0.9rem;color:var(--muted)">/100</span></div>
-        <div class="signal-bar">
-          <div class="signal-bar-fill" style="width:0%;background:${sigColor}" data-width="${sc}%"></div>
-        </div>
-        <div class="signal-desc">${s.description}</div>
-      </div>`;
+            <div class="signal-card">
+                <div class="signal-header">
+                    <span class="signal-icon">${s.icon || '📊'}</span>
+                    <span class="signal-name">${escHtml(s.name || '')}</span>
+                </div>
+                <div class="signal-score" style="color:${sigColor}">${sc}/100</div>
+                <div class="signal-bar">
+                    <div class="signal-bar-fill" style="width:0%;background:${sigColor}" data-target="${sc}"></div>
+                </div>
+                <div class="signal-desc">${escHtml(s.description || '')}</div>
+            </div>`;
         }).join('');
+
         setTimeout(() => {
-            document.querySelectorAll('.signal-bar-fill').forEach(el => { el.style.width = el.dataset.width; });
-        }, 200);
-        const sc = { high: '#ff3b5c', medium: '#ffb800', low: '#00e5ff' };
-        document.getElementById('flags-list').innerHTML = r.flags.map(f => `
-    <div class="flag-item">
-      <div class="flag-dot" style="background:${sc[f.severity] || '#888'}"></div>
-      <div class="flag-content">
-        <div class="flag-type" style="color:${sc[f.severity] || '#888'}">${f.type} · ${f.severity} severity</div>
-        <div class="flag-text">${f.description}</div>
-      </div>
-    </div>`).join('');
-        document.getElementById('summary-box').textContent = r.fullSummary;
-        document.getElementById('results').classList.add('visible');
-        document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+            document.querySelectorAll('.signal-bar-fill').forEach(el => {
+                el.style.width = el.dataset.target + '%';
+            });
+        }, 150);
+
+        const severityColor = { high: '#ff3b5c', medium: '#ffb800', low: '#00e5ff' };
+        const flags = Array.isArray(r.flags) ? r.flags : [];
+
+        if (flags.length === 0) {
+            document.getElementById('flags-list').innerHTML =
+                '<div class="no-flags">✅ No significant red flags detected.</div>';
+        } else {
+            document.getElementById('flags-list').innerHTML = flags.map(f => {
+                const sev = (f.severity || 'low').toLowerCase();
+                const sc = severityColor[sev] || '#00e5ff';
+                return `
+                <div class="flag-item">
+                    <div class="flag-dot" style="background:${sc}"></div>
+                    <div>
+                        <div class="flag-type" style="color:${sc}">${escHtml(f.type || 'Pattern')} · ${escHtml(sev)}</div>
+                        <div class="flag-text">${escHtml(f.description || '')}</div>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        document.getElementById('summary-box').textContent = r.fullSummary || r.summary || 'No summary available.';
+
+        const resultsEl = document.getElementById('results');
+        resultsEl.classList.add('visible');
+        resultsEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
-    function showError(msg) {
-        const box = document.getElementById('error-box');
-        box.textContent = '⚠ ' + msg;
-        box.classList.add('visible');
+    function escHtml(str) {
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
     }
 </script>
 </body>
